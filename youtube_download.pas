@@ -4,9 +4,10 @@ program youtube_download;
 
 uses
  {$IFDEF UNIX}
-  cthreads,              {$ENDIF}
+  cthreads,                              {$ENDIF}
   Classes,
-  SysUtils, videodownloader,
+  SysUtils,
+  videodownloader,
   CustApp,
   crt;
 
@@ -16,6 +17,7 @@ type
 
   TMyApplication = class(TCustomApplication)
   private
+    Fx, Fy: tcrtcoord;
     procedure RecvHandler(AFilePath: string; AProgress, ASize: longword);
   protected
     FDownloader: TYouTubeVideo;
@@ -29,14 +31,11 @@ type
   { TMyApplication }
 
   procedure TMyApplication.RecvHandler(AFilePath: string; AProgress, ASize: longword);
-  var
-    x, y: DWord;
   begin
-    x := WhereX32;
-    y := WhereY32;
-    WriteLn(AProgress, '/', ASize, '              ');
-    GotoXY32(x, y);
-
+    if ASize = 0 then
+      exit;
+    GotoXY(fx, fy);
+    WriteLn(trim(FormatFloat('### ### ### ### ###', AProgress)), '/', trim(FormatFloat('### ### ### ### ###', ASize)), '              ');
   end;
 
   procedure TMyApplication.DoRun;
@@ -65,7 +64,6 @@ type
       Terminate;
       Exit;
     end;
-
     url := ParamStr(1);
     if ParamStr(2) <> '' then
       filename := ParamStr(2)
@@ -90,6 +88,13 @@ type
 
       end;
       writeln('----');
+      writeln('Download default URL.');
+      writeln('----');
+      writeln('');
+
+      fx := WhereX;
+      fy := WhereY - 1;
+
       FDownloader.DownLoad(filename);
     finally
       FreeAndNil(FDownloader);

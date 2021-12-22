@@ -62,6 +62,8 @@ type
     function SetWebURL(AWebUrl: string): string; virtual;
     function GetInfo: TVideoInfo; virtual;
     function DownLoad(AFileName: string): int64;
+    function DownLoad(AUrl, AFileName: string): int64;
+    property DefaultDownloadUrl: string read FDownloadUrl;
     property OnDataReceived: TOnProgressDownload read FOnDataReceived write FOnDataReceived;
   end;
 
@@ -122,6 +124,11 @@ begin
 end;
 
 function TBaseDownloader.DownLoad(AFileName: string): int64;
+begin
+  DownLoad(FDownloadUrl, AFileName);
+end;
+
+function TBaseDownloader.DownLoad(AUrl, AFileName: string): int64;
 var
   http: TFPHTTPClient;
   header: TStringList;
@@ -135,7 +142,7 @@ begin
     try
       http.AllowRedirect := True;
       http.OnDataReceived := @DataReceivedHandler;
-      http.Get(FDownloadUrl, tmpfile);
+      http.Get(AUrl, tmpfile);
     finally
       FreeAndNil(tmpfile);
     end;
@@ -211,9 +218,8 @@ begin
     jObj := (FJsonData.FindPath('streamingData.adaptiveFormats') as TJSONArray)[i] as TJSONObject;
     url.itag := jObj.Get('itag');
     url.Link := jObj.Get('url');
-    url.mimeType:=jObj.Get('mimeType');
+    url.mimeType := jObj.Get('mimeType');
     FVideoInfo.FDownloadUrls.Add(url);
-    writeln(jObj.Get('itag'));
   end;
 
   Result := FVideoInfo;
