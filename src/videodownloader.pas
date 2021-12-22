@@ -5,15 +5,16 @@ unit videodownloader;
 interface
 
 uses
-  Classes, SysUtils, fphttpclient, opensslsockets, regexpr, fpjson, jsonparser, Generics.Collections;
+  Classes, SysUtils, fphttpclient, opensslsockets, regexpr, fpjson, jsonparser, Generics.Collections,
+  system.NetEncoding;
 
 type
   //TVideoQuality = (vqMedium, vqHd720, vqHd2160, vqHd1440, vqHd1080, vqLarge, vqSmall, vqTiny);
 
   // Download Begin
-  TOnBeginDownload = procedure(AFilePath: string; ASize: longword) of object;
+  TOnBeginDownload = procedure(AFilePath: string; ASize: int64) of object;
   // Download Progress
-  TOnProgressDownload = procedure(AFilePath: string; AProgress, ASize: longword) of object;
+  TOnProgressDownload = procedure(AFilePath: string; AProgress, ASize: int64) of object;
   // Download End
   TOnEndDownload = TOnBeginDownload;
   // Download Error
@@ -38,6 +39,7 @@ type
     FAuthor: string;
     FLength: int64;
     FDownloadUrls: TDownloadUrlList;
+    function DecodeText(AString: string): string;
   public
     constructor Create;
     destructor Destroy; override;
@@ -46,18 +48,31 @@ type
     property Author: string read FAuthor;
     property Length: int64 read FLength;
     property DownloadUrls: TDownloadUrlList read FDownloadUrls;
+  end;
 
+
+  IDownLoader = interface
+    procedure SetOnDataReceived(AEvent: TOnProgressDownload);
+    function GetOnDataReceived: TOnProgressDownload;
+    function SetWebURL(AWebUrl: string): string; virtual;
+    function GetInfo: TVideoInfo; virtual;
+    function DownLoad(AFileName: string): int64;
+    function DownLoad(AUrl, AFileName: string): int64;
+    property OnDataReceived: TOnProgressDownload read GetOnDataReceived write SetOnDataReceived;
   end;
 
   { TBaseDownloader }
 
-  TBaseDownloader = class
+  TBaseDownloader = class(TInterfacedObject, IDownLoader)
   private
     FVideoInfo: TVideoInfo;
     FWebUrl: string;
     FDownloadUrl: string;
     FOnDataReceived: TOnProgressDownload;
     procedure DataReceivedHandler(Sender: TObject; const ContentLength, CurrentPos: int64);
+    function FindContent(ARegExpression, AText: string): string;
+    procedure SetOnDataReceived(AEvent: TOnProgressDownload);
+    function GetOnDataReceived: TOnProgressDownload;
   public
     constructor Create;
     destructor Destroy; override;
@@ -71,7 +86,18 @@ type
 
   { TYouTubeVideo }
 
-  TYouTubeVideo = class(TBaseDownloader)
+  TYouTubeVideo = class(TBaseDownloader, IDownLoader)
+  private
+    FJsonData: TJSONData;
+  public
+    function SetWebURL(AWebUrl: string): string; overload;
+    function GetInfo: TVideoInfo; override;
+    destructor Destroy; override;
+  end;
+
+  { TYapVideo }
+
+  TYapVideo = class(TBaseDownloader, IDownLoader)
   private
     FJsonData: TJSONData;
   public
@@ -81,9 +107,59 @@ type
   end;
 
 
+
 implementation
 
+{ TYapVideo }
+
+function TYapVideo.SetWebURL(AWebUrl: string): string;
+var
+  http: TFPHTTPClient;
+  str: TStringList;
+  r: TRegExpr;
+begin
+  str := TStringList.Create;
+  try
+    http := TFPHTTPClient.Create(nil);
+    try
+      http.Get(AWebUrl, str);
+    finally
+      FreeAndNil(http);
+    end;
+
+    FDownloadUrl := FindContent('\<\!--Begin Video:(.*?)--\>', str.Text);
+    FVideoInfo.FVideoName := FVideoInfo.DecodeText(FindContent('\<meta property="og:title" content="(.*?)\>',
+      str.Text));
+    FVideoInfo.FAuthor := '';
+  finally
+    FreeAndNil(str);
+  end;
+end;
+
+function TYapVideo.GetInfo: TVideoInfo;
+begin
+  Result := inherited GetInfo;
+end;
+
+destructor TYapVideo.Destroy;
+begin
+  inherited Destroy;
+end;
+
 { TVideoInfo }
+
+function TVideoInfo.DecodeText(AString: string): string;
+var
+  html: THTMLEncoding;
+begin
+  Result := AString;
+  html := THTMLEncoding.Create;
+  try
+    Result := html.Decode(AString);
+  finally
+    FreeAndNil(html);
+  end;
+end;
 
 constructor TVideoInfo.Create;
 begin
@@ -104,6 +180,32 @@ begin
     OnDataReceived('', CurrentPos, ContentLength);
 end;
 
+function TBaseDownloader.FindContent(ARegExpression, AText: string): string;
+var
+  r: TRegExpr;
+begin
+  Result := '';
+  r := TRegExpr.Create(ARegExpression);
+  try
+    if r.Exec(AText) then
+      Result := r.Match[1]
+    else
+      exit;   // raise Exception
+  finally
+    FreeAndNil(r);
+  end;
+end;
+
+procedure TBaseDownloader.SetOnDataReceived(AEvent: TOnProgressDownload);
+begin
+  FOnDataReceived := AEvent;
+end;
+
+function TBaseDownloader.GetOnDataReceived: TOnProgressDownload;
+begin
+  Result := FOnDataReceived;
+end;
+
 constructor TBaseDownloader.Create;
 begin
   FVideoInfo := TVideoInfo.Create;
@@ -122,7 +224,7 @@ end;
 
 function TBaseDownloader.GetInfo: TVideoInfo;
 begin
-  raise Exception.Create('Override GetInfo method');
+  Result := FVideoInfo;
 end;
 
 function TBaseDownloader.DownLoad(AFileName: string): int64;
@@ -151,7 +253,6 @@ begin
   finally
     FreeAndNil(http);
   end;
-
 end;
 
 { TYouTubeVideo }
@@ -167,35 +268,21 @@ var
 begin
   FWebUrl := AWebUrl;
   str := TStringList.Create;
-  http := TFPHTTPClient.Create(nil);
   try
-    http.Get(AWebUrl, str);
-    r := TRegExpr.Create('var ytInitialPlayerResponse = (.*?);</script>');
+    http := TFPHTTPClient.Create(nil);
     try
-      if r.Exec(str.Text) then
-      begin
-        jsonstr := r.Match[1];
-      end
-      else
-        exit;
+      http.Get(AWebUrl, str);
     finally
-      FreeAndNil(r);
+      FreeAndNil(http);
     end;
+    jsonstr := FindContent('var ytInitialPlayerResponse = (.*?);</script>', str.Text);
   finally
     FreeAndNil(str);
-    FreeAndNil(http);
   end;
 
   try
     FJsonData := GetJSON(jsonstr);
-    // ----
-    // str := TStringList.Create;
-    // str.Text := FJsonData.FormatJSON();
-    // str.SaveToFile('json.json');
-    // str.Free;
-    // ----
     FDownloadUrl := TJSONObject(TJSONArray(FJsonData.FindPath('streamingData.formats'))[0]).Get('url');
-
     Result := FDownloadUrl;
   except
     on e: Exception do
@@ -209,8 +296,7 @@ var
   jObj: TJSONObject;
   url: TDownloadUrl;
 begin
-  //Result:=inherited GetInfo;
-  // Result.
+  Result := inherited GetInfo;
   FVideoInfo.FVideoName := TJSONObject(FJsonData.FindPath('videoDetails')).Get('title', '');
   FVideoInfo.FAuthor := TJSONObject(FJsonData.FindPath('videoDetails')).Get('author', '');
   FVideoInfo.FLength := string(TJSONObject(FJsonData.FindPath('videoDetails')).Get('lengthSeconds', '-1')).ToInt64;
@@ -226,8 +312,6 @@ begin
 
     FVideoInfo.FDownloadUrls.Add(url);
   end;
-
-  Result := FVideoInfo;
 end;
 
 destructor TYouTubeVideo.Destroy;

@@ -4,7 +4,7 @@ program youtube_download;
 
 uses
  {$IFDEF UNIX}
-  cthreads,                                {$ENDIF}
+  cthreads,                                              {$ENDIF}
   Classes,
   SysUtils,
   videodownloader,
@@ -18,10 +18,11 @@ type
   TMyApplication = class(TCustomApplication)
   private
     Fx, Fy: tcrtcoord;
-    procedure RecvHandler(AFilePath: string; AProgress, ASize: longword);
+    procedure RecvHandler(AFilePath: string; AProgress, ASize: int64);
   protected
-    FDownloader: TYouTubeVideo;
+    FDownloader: IDownLoader;
     procedure DoRun; override;
+    function CreateDownloader(AUrl: string): IDownLoader;
   public
     constructor Create(TheOwner: TComponent); override;
     destructor Destroy; override;
@@ -30,12 +31,13 @@ type
 
   { TMyApplication }
 
-  procedure TMyApplication.RecvHandler(AFilePath: string; AProgress, ASize: longword);
+  procedure TMyApplication.RecvHandler(AFilePath: string; AProgress, ASize: int64);
   begin
     if ASize = 0 then
       exit;
     GotoXY(fx, fy);
-    WriteLn(trim(FormatFloat('### ### ### ### ###', AProgress)), '/', trim(FormatFloat('### ### ### ### ###', ASize)), '              ');
+    WriteLn(trim(FormatFloat('### ### ### ### ###', AProgress)), '/', trim(FormatFloat('### ### ### ### ###', ASize)),
+      '              ');
   end;
 
   procedure TMyApplication.DoRun;
@@ -71,36 +73,38 @@ type
       filename := 'downloaded.mp4';
 
     writeln(url);
-    FDownloader := TYouTubeVideo.Create;
-    FDownloader.OnDataReceived := @RecvHandler;
-    try
-      FDownloader.SetWebURL(url);
-      info := FDownloader.GetInfo;
-      writeln('Title - ', info.VideoName);
-      writeln('Author - ', info.Author);
-      writeln('Length - ', info.Length, ' seconds');
-      for downloadurl in info.DownloadUrls do
-      begin
-        TextColor(Yellow);
-        Write(' - ', downloadurl.mimeType, ': ');
-        TextColor(LightCyan);
-        writeln(downloadurl.quality, ' - ', downloadurl.QualityLabel);
-        TextColor(LightGray);
-        writeln('"', downloadurl.Link, '"');
-
-      end;
-      writeln('----');
-      writeln('Download default URL.');
-      writeln('----');
-      writeln('');
-
-      fx := WhereX;
-      fy := WhereY - 1;
-
-      FDownloader.DownLoad(filename);
-    finally
-      FreeAndNil(FDownloader);
+    FDownloader := CreateDownloader(url);
+    if not Assigned(FDownloader) then
+    begin
+      writeln('Resource not found');
+      exit;
     end;
+
+    FDownloader.OnDataReceived := @RecvHandler;
+    FDownloader.SetWebURL(url);
+    info := FDownloader.GetInfo;
+    writeln('Title - ', info.VideoName);
+    writeln('Author - ', info.Author);
+    writeln('Length - ', info.Length, ' seconds');
+    for downloadurl in info.DownloadUrls do
+    begin
+      TextColor(Yellow);
+      Write(' - ', downloadurl.mimeType, ': ');
+      TextColor(LightCyan);
+      writeln(downloadurl.quality, ' - ', downloadurl.QualityLabel);
+      TextColor(LightGray);
+      writeln('"', downloadurl.Link, '"');
+
+    end;
+    writeln('----');
+    writeln('Download default URL.');
+    writeln('----');
+    writeln('');
+
+    fx := WhereX;
+    fy := WhereY - 1;
+
+    FDownloader.DownLoad(filename);
     WriteLn('Download complete');
 
     { add your program here }
@@ -108,6 +112,16 @@ type
     // stop program loop
     // readln;
     Terminate;
+  end;
+
+  function TMyApplication.CreateDownloader(AUrl: string): IDownLoader;
+  begin
+    Result := nil;
+    if pos('youtube.com', AUrl) <> 0 then
+      Result := TYouTubeVideo.Create
+    else
+    if (pos('yaplakal.com', AUrl) <> 0) or (pos('yap.ru', AUrl) <> 0) then
+      Result := TYapVideo.Create;
   end;
 
   constructor TMyApplication.Create(TheOwner: TComponent);
