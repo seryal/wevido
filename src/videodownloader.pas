@@ -24,6 +24,8 @@ type
     itag: integer; // https://gist.github.com/sidneys/7095afe4da4ae58694d128b1034e01e2
     Link: string;
     mimeType: string;
+    Quality: string;
+    QualityLabel: string;
   end;
   TDownloadUrlList = specialize TList<TDownLoadUrl>;
 
@@ -219,6 +221,9 @@ begin
     url.itag := jObj.Get('itag');
     url.Link := jObj.Get('url');
     url.mimeType := jObj.Get('mimeType');
+    url.Quality := jObj.Get('quality', '');
+    url.QualityLabel := jObj.Get('qualityLabel', '');
+
     FVideoInfo.FDownloadUrls.Add(url);
   end;
 

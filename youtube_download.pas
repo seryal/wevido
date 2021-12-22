@@ -4,7 +4,7 @@ program youtube_download;
 
 uses
  {$IFDEF UNIX}
-  cthreads,                              {$ENDIF}
+  cthreads,                                {$ENDIF}
   Classes,
   SysUtils,
   videodownloader,
@@ -82,9 +82,11 @@ type
       for downloadurl in info.DownloadUrls do
       begin
         TextColor(Yellow);
-        Write(' - ', downloadurl.mimeType);
+        Write(' - ', downloadurl.mimeType, ': ');
+        TextColor(LightCyan);
+        writeln(downloadurl.quality, ' - ', downloadurl.QualityLabel);
         TextColor(LightGray);
-        writeln(' "', downloadurl.Link, '"');
+        writeln('"', downloadurl.Link, '"');
 
       end;
       writeln('----');
