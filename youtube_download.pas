@@ -2,9 +2,8 @@ program youtube_download;
 
 {$mode objfpc}{$H+}
 
-uses
- {$IFDEF UNIX}
-  cthreads,                                              {$ENDIF}
+uses {$IFDEF UNIX}
+  cthreads, {$ENDIF}
   Classes,
   SysUtils,
   videodownloader,
@@ -36,7 +35,8 @@ type
     if ASize = 0 then
       exit;
     GotoXY(fx, fy);
-    WriteLn(trim(FormatFloat('### ### ### ### ###', AProgress)), '/', trim(FormatFloat('### ### ### ### ###', ASize)),
+    WriteLn(trim(FormatFloat('### ### ### ### ###', AProgress)), '/',
+      trim(FormatFloat('### ### ### ### ###', ASize)),
       '              ');
   end;
 
@@ -77,35 +77,38 @@ type
     if not Assigned(FDownloader) then
     begin
       writeln('Resource not found');
-      exit;
-    end;
 
-    FDownloader.OnDataReceived := @RecvHandler;
-    FDownloader.SetWebURL(url);
-    info := FDownloader.GetInfo;
-    writeln('Title - ', info.VideoName);
-    writeln('Author - ', info.Author);
-    writeln('Length - ', info.Length, ' seconds');
-    for downloadurl in info.DownloadUrls do
+    end
+    else
     begin
-      TextColor(Yellow);
-      Write(' - ', downloadurl.mimeType, ': ');
-      TextColor(LightCyan);
-      writeln(downloadurl.quality, ' - ', downloadurl.QualityLabel);
-      TextColor(LightGray);
-      writeln('"', downloadurl.Link, '"');
 
+      FDownloader.OnDataReceived := @RecvHandler;
+      FDownloader.SetWebURL(url);
+      info := FDownloader.GetInfo;
+      writeln('Title - ', info.VideoName);
+      writeln('Author - ', info.Author);
+      writeln('Length - ', info.Length, ' seconds');
+      for downloadurl in info.DownloadUrls do
+      begin
+        TextColor(Yellow);
+        Write(' - ', downloadurl.mimeType, ': ');
+        TextColor(LightCyan);
+        writeln(downloadurl.quality, ' - ', downloadurl.QualityLabel);
+        TextColor(LightGray);
+        writeln('"', downloadurl.Link, '"');
+
+      end;
+      writeln('----');
+      writeln('Download default URL.');
+      writeln('----');
+      writeln('');
+
+      fx := WhereX;
+      fy := WhereY - 1;
+
+      FDownloader.DownLoad(filename);
+      WriteLn('Download complete');
     end;
-    writeln('----');
-    writeln('Download default URL.');
-    writeln('----');
-    writeln('');
-
-    fx := WhereX;
-    fy := WhereY - 1;
-
-    FDownloader.DownLoad(filename);
-    WriteLn('Download complete');
 
     { add your program here }
 
@@ -120,7 +123,7 @@ type
     if pos('youtube.com', AUrl) <> 0 then
       Result := TYouTubeVideo.Create
     else
-    if (pos('yaplakal.com', AUrl) <> 0) or (pos('yap.ru', AUrl) <> 0) then
+    if (pos('yapfiles.ru', AUrl) <> 0) then
       Result := TYapVideo.Create;
   end;
 

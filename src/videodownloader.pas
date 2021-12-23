@@ -5,7 +5,8 @@ unit videodownloader;
 interface
 
 uses
-  Classes, SysUtils, fphttpclient, opensslsockets, regexpr, fpjson, jsonparser, Generics.Collections,
+  Classes, SysUtils, fphttpclient, opensslsockets, regexpr, fpjson,
+  jsonparser, Generics.Collections,
   system.NetEncoding;
 
 type
@@ -58,7 +59,8 @@ type
     function GetInfo: TVideoInfo; virtual;
     function DownLoad(AFileName: string): int64;
     function DownLoad(AUrl, AFileName: string): int64;
-    property OnDataReceived: TOnProgressDownload read GetOnDataReceived write SetOnDataReceived;
+    property OnDataReceived: TOnProgressDownload
+      read GetOnDataReceived write SetOnDataReceived;
   end;
 
   { TBaseDownloader }
@@ -69,7 +71,8 @@ type
     FWebUrl: string;
     FDownloadUrl: string;
     FOnDataReceived: TOnProgressDownload;
-    procedure DataReceivedHandler(Sender: TObject; const ContentLength, CurrentPos: int64);
+    procedure DataReceivedHandler(Sender: TObject;
+      const ContentLength, CurrentPos: int64);
     function FindContent(ARegExpression, AText: string): string;
     procedure SetOnDataReceived(AEvent: TOnProgressDownload);
     function GetOnDataReceived: TOnProgressDownload;
@@ -81,7 +84,8 @@ type
     function DownLoad(AFileName: string): int64;
     function DownLoad(AUrl, AFileName: string): int64;
     property DefaultDownloadUrl: string read FDownloadUrl;
-    property OnDataReceived: TOnProgressDownload read FOnDataReceived write FOnDataReceived;
+    property OnDataReceived: TOnProgressDownload
+      read FOnDataReceived write FOnDataReceived;
   end;
 
   { TYouTubeVideo }
@@ -122,14 +126,23 @@ begin
   try
     http := TFPHTTPClient.Create(nil);
     try
-      http.Get(AWebUrl, str);
+      //WriteLn(AWebUrl);
+      try
+        http.Get(AWebUrl, str);
+        http.ResponseHeaders.SaveToFile('header.txt');
+      except
+        on e: Exception do
+          writeln(http.ResponseStatusCode);
+
+      end;
     finally
       FreeAndNil(http);
     end;
-
-    FDownloadUrl := FindContent('\<\!--Begin Video:(.*?)--\>', str.Text);
-    FVideoInfo.FVideoName := FVideoInfo.DecodeText(FindContent('\<meta property="og:title" content="(.*?)\>',
-      str.Text));
+    str.SaveToFile('html.html');
+    FDownloadUrl := FindContent(
+      '\<input type=\"text\" name=\"direct_link\" value=\"(.*?)\".*?\/\>', str.Text);
+    FVideoInfo.FVideoName := FVideoInfo.DecodeText(
+      FindContent('\<meta property="og:title" content="(.*?)\>', str.Text));
     FVideoInfo.FAuthor := '';
   finally
     FreeAndNil(str);
@@ -174,7 +187,8 @@ end;
 
 { TBaseDownloader }
 
-procedure TBaseDownloader.DataReceivedHandler(Sender: TObject; const ContentLength, CurrentPos: int64);
+procedure TBaseDownloader.DataReceivedHandler(Sender: TObject;
+  const ContentLength, CurrentPos: int64);
 begin
   if Assigned(OnDataReceived) then
     OnDataReceived('', CurrentPos, ContentLength);
@@ -242,6 +256,8 @@ var
 begin
   http := TFPHTTPClient.Create(nil);
   try
+    // https://www.yaplakal.com/forum28/topic2369414.html - html
+    // https://www.yaplakal.com/forum28/topic2368974.html - video
     tmpfile := TFileStream.Create(AFileName, fmCreate or fmOpenWrite);
     try
       http.AllowRedirect := True;
@@ -282,7 +298,9 @@ begin
 
   try
     FJsonData := GetJSON(jsonstr);
-    FDownloadUrl := TJSONObject(TJSONArray(FJsonData.FindPath('streamingData.formats'))[0]).Get('url');
+    FDownloadUrl := TJSONObject(TJSONArray(FJsonData.FindPath('streamingData.formats'))
+      [0]).Get('url');
+
     Result := FDownloadUrl;
   except
     on e: Exception do
@@ -301,9 +319,11 @@ begin
   FVideoInfo.FAuthor := TJSONObject(FJsonData.FindPath('videoDetails')).Get('author', '');
   FVideoInfo.FLength := string(TJSONObject(FJsonData.FindPath('videoDetails')).Get('lengthSeconds', '-1')).ToInt64;
   i := TJSONArray(FJsonData.FindPath('streamingData.adaptiveFormats')).Count;
-  for i := 0 to (FJsonData.FindPath('streamingData.adaptiveFormats') as TJSONArray).Count - 1 do
+  for i := 0 to (FJsonData.FindPath('streamingData.adaptiveFormats') as
+      TJSONArray).Count - 1 do
   begin
-    jObj := (FJsonData.FindPath('streamingData.adaptiveFormats') as TJSONArray)[i] as TJSONObject;
+    jObj := (FJsonData.FindPath('streamingData.adaptiveFormats') as TJSONArray)[i] as
+      TJSONObject;
     url.itag := jObj.Get('itag');
     url.Link := jObj.Get('url');
     url.mimeType := jObj.Get('mimeType');
